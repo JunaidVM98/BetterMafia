@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lobby {{ lobby.lobby_id }}</title>
+    <script src="https://cdn.socket.io/3.1.3/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
+    <script type="text/javascript" charset="utf-8">
+        var startGameUrl = '{{ url_for("start_game", lobby_id=lobby.lobby_id) }}';
+        var gameUrl = '{{ url_for("game", lobby_id=lobby.lobby_id) }}';
+        var userToken = '{{ user_token }}';  // Get the user's unique token from Flask
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var hasJoined = document.getElementById('alreadyJoined').value === 'true';
+
+            if (hasJoined) {
+            // Hide the join form
+            var joinForm = document.querySelector('form');
+            if (joinForm) {
+                joinForm.style.display = 'none';
+            }
+        }
+        });
+
+        var socket = io.connect('http://' + document.domain + ':' + location.port + '/lobby');
+    
+        // Function to handle joining the lobby
+        function joinLobby() {
+            var nameInput = document.getElementById('name');
+            var name = nameInput.value;
+            socket.emit('join', {'lobby_id': '{{ lobby.lobby_id }}', 'name': name});
+            nameInput.value = '';  // Clear the input
+            return false;  // Prevent form submission
+        }
+
+        // Handle the join event
+        socket.on('update_participants', function(data) {
+            if (data.user_token === userToken) {
+                hasJoined = true;
+                // Hide the join form
+                var joinForm = document.querySelector('form');
+                if (joinForm) {
+                    joinForm.style.display = 'none';
+                }
+            }
+
+            // Update the participant list
+            var participantList = document.getElementById('participants');
+            if (participantList) {
+                participantList.innerHTML += '<li>' + data.name + '</li>';
+
+                // Check if the number of participants is 4 or more (to determine if the creator has enoug users to start lobby)
+                if (isCreator && participantList.getElementsByTagName('li').length >= 4) {
+                    document.getElementById('startGameButton').style.display = 'block';
+                }
+
+            } else {
+                console.error('Participant list element not found');
+            }
+        });
+
+        function startGame() {
+            fetch(startGameUrl, { method: 'POST' })
+                .then(response => {
+                    window.location.href = gameUrl;
+                });
+        }
+
+
+        //removed from here
+
+        socket.on('redirect_to_game', function(data) {
+            window.location.href = gameUrl;
+        });
+
+    </script>
+</head>
+<body>
+    <input type="hidden" id="alreadyJoined" value="{{ 'true' if already_joined else 'false' }}">
+
+    <h1>Lobby ID: {{ lobby.lobby_id }}</h1>
+    <h2>Created by: {{ lobby.creator_name }}</h2>
+    <h3>Participants:</h3>
+    <ul id="participants">
+        {% for participant in participants %}
+            <li>{{ participant.name }}</li>
+        {% endfor %}
+    </ul>
+
+    {% if is_creator %}
+    <button id="startGameButton" onclick="startGame()" style="display: none;">Start Game</button>
+    {% endif %}
+
+    {% if not is_creator and not already_joined %}
+    <form onsubmit="return joinLobby()">
+        <label for="name">Enter your name to join:</label>
+        <input type="text" id="name" name="name" required>
+        <input type="submit" value="Join Lobby">
+    </form>
+    {% endif %}       
+    
+
+    <input type="hidden" id="isCreator" value="{{ is_creator|lower }}">
+    <script type="text/javascript" charset="utf-8">
+        var isCreator = document.getElementById('isCreator').value === 'true'; // Convert to boolean
+        //removed from here
+        socket.on('participant_already_joined', function(data) {
+            alert('This name has been taken. Please choose another name.');
+        });
+    </script>
+
+    {% if not is_creator and already_joined %}
+    <p>Waiting for the lobby creator to start the game...</p>
+    {% endif %}
+
+    <h4>Lobby Link:</h4>
+    <input type="text" id="lobbyLink" value="{{ url_for('lobby', lobby_id=lobby.lobby_id, _external=True) }}" readonly>
+    <button class="btn" data-clipboard-target="#lobbyLink">Copy Link</button>
+    <script>
+        var clipboard = new ClipboardJS('.btn');
+    </script>
+</body>
+</html>
