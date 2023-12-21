@@ -1,11 +1,14 @@
-# if creating a new environment
-# python -m venv virtual_environment_name (e.g. python -m venv mpg)
+# if no environment has been created previously or you have recloned the solution, create a new environment:
+# python -m venv game_env
 
-# if using an existing environment, load into it
-# virtual_environment_name\Scripts\activate (e.g. mpg\Scripts\activate)
+# to load into the created environment (or to use an existing environment):
+# game_env\Scripts\activate
 
-# packages to install if not installed in current environment
-# pip install flask 
+# packages to install if not installed in current environment:
+# pip install -r requirements.txt
+
+# Run the solution:
+# python app.py
 
 from flask import Flask, render_template, request, redirect, url_for, session, make_response
 from shared import db  # Import db from shared.py instead of creating it here (otherwise we get circular referencing)
@@ -16,12 +19,11 @@ import uuid
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///game.db'
-app.config['SECRET_KEY'] = 'secret!'  # You should use a random secret key
+app.config['SECRET_KEY'] = 'secret!'  # Should be a random secret key
 socketio = SocketIO(app)
-db.init_app(app)  # Initialize db with the app
+db.init_app(app)
 migrate = Migrate(app, db)
 
-# Move these imports after db is initialized
 from database import Lobby, Participant
 
 def init_db():
@@ -83,10 +85,9 @@ def lobby(lobby_id):
             already_joined = True
 
     # Set or update the user token cookie
-    response = make_response(render_template('lobby.html', lobby=lobby, participants=participants, is_creator=is_creator, already_joined=already_joined))
+    response = make_response(render_template('lobby.html', lobby=lobby, participants=participants, is_creator=is_creator, already_joined=already_joined, game_started=lobby.game_started))
     response.set_cookie('user_token', user_token)
     return response
-
 
 @socketio.on('join', namespace='/lobby')
 def handle_join(data):
@@ -94,10 +95,13 @@ def handle_join(data):
     participant_name = data['name']
     lobby = Lobby.query.filter_by(lobby_id=lobby_id).first()
 
+    # Retrieve or assign a new user token
+    user_token = request.cookies.get('user_token', str(uuid.uuid4()))
+
     # Check if the participant already exists in the lobby
     existing_participant = Participant.query.filter_by(name=participant_name, lobby_id=lobby.id).first()
     if existing_participant is None:
-        new_participant = Participant(name=participant_name, lobby_id=lobby.id)
+        new_participant = Participant(name=participant_name, lobby_id=lobby.id, user_token=user_token)
         db.session.add(new_participant)
         db.session.commit()
         emit('update_participants', {'name': participant_name}, broadcast=True, namespace='/lobby')
@@ -111,16 +115,19 @@ def start_game(lobby_id):
     if 'creator_name' in session and session['creator_name'] == lobby.creator_name:
         lobby.game_started = True
         db.session.commit()
-        emit('redirect_to_game', {'lobby_id': lobby_id}, broadcast=True, namespace='/lobby')
+        socketio.emit('redirect_to_game', {'lobby_id': lobby_id}, namespace='/lobby')
+        socketio.emit('lobby_closed', {'lobby_id': lobby_id}, namespace='/lobby')
     return '', 204
 
 @app.route('/game/<lobby_id>', methods=['GET'])
 def game(lobby_id):
     lobby = Lobby.query.filter_by(lobby_id=lobby_id).first_or_404()
 
-    # Check if the user has joined this lobby
-    if 'joined_lobby' not in session or session['joined_lobby'] != lobby_id:
-        return "You do not have access to this game."
+    user_token = request.cookies.get('user_token')
+    participant = Participant.query.filter_by(lobby_id=lobby.id, user_token=user_token).first()
+
+    if not participant:
+        return f"Sorry you're not a member of this lobby so cannot access this game! <br> Either wait until the participants <a href='../lobby/{lobby_id}'>return to the lobby</a> so you can join, or <a href='../'>start your own game</a>."
 
     participants = Participant.query.filter_by(lobby_id=lobby.id).all()
     is_creator = 'creator_name' in session and session['creator_name'] == lobby.creator_name

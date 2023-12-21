@@ -7,30 +7,54 @@
     <script type="text/javascript" charset="utf-8">
         var startGameUrl = '{{ url_for("start_game", lobby_id=lobby.lobby_id) }}';
         var gameUrl = '{{ url_for("game", lobby_id=lobby.lobby_id) }}';
-        var userToken = '{{ user_token }}';  // Get the user's unique token from Flask
+        var userToken = '{{ user_token }}';
+        var lobbyId = '{{ lobby.lobby_id }}';
+        var gameStarted = '{{ lobby.game_started }}'
+        var socket = io.connect('http://' + document.domain + ':' + location.port + '/lobby');
 
         document.addEventListener('DOMContentLoaded', function () {
             var hasJoined = document.getElementById('alreadyJoined').value === 'true';
 
-            if (hasJoined) {
-            // Hide the join form
-            var joinForm = document.querySelector('form');
-            if (joinForm) {
-                joinForm.style.display = 'none';
+            if (gameStarted === 'True') {
+                if (hasJoined === false) {
+                    var joinForm = document.querySelector('form');
+                    if (joinForm) {
+                        joinForm.style.display = 'none';
+                    }
+                    document.getElementById('lobbyClosedMessage').style.display = 'block';
+                }
             }
-        }
-        });
 
-        var socket = io.connect('http://' + document.domain + ':' + location.port + '/lobby');
-    
-        // Function to handle joining the lobby
-        function joinLobby() {
-            var nameInput = document.getElementById('name');
-            var name = nameInput.value;
-            socket.emit('join', {'lobby_id': '{{ lobby.lobby_id }}', 'name': name});
-            nameInput.value = '';  // Clear the input
-            return false;  // Prevent form submission
-        }
+            socket.on('lobby_closed', function(data) {
+                if (data.lobby_id === lobbyId) {
+                    var joinForm = document.querySelector('form');
+                    if (joinForm) {
+                        joinForm.style.display = 'none';
+                    }
+                    document.getElementById('lobbyClosedMessage').style.display = 'block';
+                }
+            });
+
+            socket.on('redirect_to_game', function(data) {
+            if (hasJoined) {
+                    window.location.href = gameUrl;
+                }
+            });
+
+            if (hasJoined) {
+                // Hide the join form
+                var joinForm = document.querySelector('form');
+                if (joinForm) {
+                    joinForm.style.display = 'none';
+                }
+
+                // In case the person who created the lobby refreshes, we need to ensure the we count participants on page reload so we know whether to show the Start Game button
+                var participantList = document.getElementById('participants');
+                if (isCreator && participantList.getElementsByTagName('li').length >= 4) {
+                    document.getElementById('startGameButton').style.display = 'block';
+                }
+            }
+        });
 
         // Handle the join event
         socket.on('update_participants', function(data) {
@@ -64,14 +88,6 @@
                     window.location.href = gameUrl;
                 });
         }
-
-
-        //removed from here
-
-        socket.on('redirect_to_game', function(data) {
-            window.location.href = gameUrl;
-        });
-
     </script>
 </head>
 <body>
@@ -96,20 +112,42 @@
         <input type="text" id="name" name="name" required>
         <input type="submit" value="Join Lobby">
     </form>
-    {% endif %}       
-    
+    <div id="lobbyClosedMessage" style="display: none;">
+        Sorry, you cannot join the lobby at this time as a game has started. You may join this lobby once participants finish with their game and return to lobby.
+    </div>
+    {% endif %}
+
+    <p id="waitingMessage" style="display: none;">Waiting for the lobby creator to start the game...</p>
 
     <input type="hidden" id="isCreator" value="{{ is_creator|lower }}">
     <script type="text/javascript" charset="utf-8">
-        var isCreator = document.getElementById('isCreator').value === 'true'; // Convert to boolean
-        //removed from here
+        var isCreator = document.getElementById('isCreator').value === 'true';
+        var socket = io.connect('http://' + document.domain + ':' + location.port + '/lobby');
+
+        function joinLobby() {
+            var nameInput = document.getElementById('name');
+            var name = nameInput.value;
+            socket.emit('join', {'lobby_id': '{{ lobby.lobby_id }}', 'name': name});
+            
+            // Hide the join form and show the waiting message
+            document.querySelector('form').style.display = 'none';
+            document.getElementById('waitingMessage').style.display = 'block';
+
+            nameInput.value = '';
+            return false;  // Prevent form submission
+        }
+
         socket.on('participant_already_joined', function(data) {
             alert('This name has been taken. Please choose another name.');
         });
     </script>
 
     {% if not is_creator and already_joined %}
-    <p>Waiting for the lobby creator to start the game...</p>
+        {% if game_started|lower == 'true' %}
+            <p>You are a member of this lobby and the game has started, <a href='../game/{{lobby.lobby_id}}'>join here</a></p>
+        {% else %}
+            <p>Waiting for the lobby creator to start the game...</p>
+        {% endif %}
     {% endif %}
 
     <h4>Lobby Link:</h4>
