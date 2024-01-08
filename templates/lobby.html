@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html>
 <head>
     <title>Lobby {{ lobby.lobby_id }}</title>
@@ -12,6 +13,8 @@
         var gameStarted = '{{ lobby.game_started }}'
         var socket = io.connect('http://' + document.domain + ':' + location.port + '/lobby');
 
+        var maxPlayerCount = 2;
+
         document.addEventListener('DOMContentLoaded', function () {
             var hasJoined = document.getElementById('alreadyJoined').value === 'true';
 
@@ -22,6 +25,10 @@
                         joinForm.style.display = 'none';
                     }
                     document.getElementById('lobbyClosedMessage').style.display = 'block';
+                }
+                else
+                {
+                    startGame();
                 }
             }
 
@@ -50,7 +57,7 @@
 
                 // In case the person who created the lobby refreshes, we need to ensure the we count participants on page reload so we know whether to show the Start Game button
                 var participantList = document.getElementById('participants');
-                if (isCreator && participantList.getElementsByTagName('li').length >= 4) {
+                if (isCreator && participantList.getElementsByTagName('li').length >= maxPlayerCount) {
                     document.getElementById('startGameButton').style.display = 'block';
                 }
             }
@@ -73,7 +80,7 @@
                 participantList.innerHTML += '<li>' + data.name + '</li>';
 
                 // Check if the number of participants is 4 or more (to determine if the creator has enoug users to start lobby)
-                if (isCreator && participantList.getElementsByTagName('li').length >= 4) {
+                if (isCreator && participantList.getElementsByTagName('li').length >= maxPlayerCount) {
                     document.getElementById('startGameButton').style.display = 'block';
                 }
 
@@ -85,6 +92,7 @@
         function startGame() {
             fetch(startGameUrl, { method: 'POST' })
                 .then(response => {
+
                     window.location.href = gameUrl;
                 });
         }
