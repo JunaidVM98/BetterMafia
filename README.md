@@ -1,14 +1,20 @@
 # BetterMafia
 
-## How to Run
-Once cloned, open in VS Code and navigate to project root directory in the terminal.
+This project is a WIP 👷‍♂️
 
-You will need to create your own virtual environment to run the project out of. To do this, first run: python -m venv game_env (this create a virtual environment called game_env)
+## How to Run Locally
+Once cloned, open in VS Code and navigate to the project's root directory in the terminal.
 
-Load into this environment by running: game_env\Scripts\activate
+### Initial setup: 
 
-Then install all the dependencies by running: pip install -r requirements.txt
+1) Run **python -m venv game_env** (this creates a virtual environment called **game_env**)
 
-Now run: python app.py
+2) Load into this environment by running **game_env\Scripts\activate**
 
-Anytime you want to run the code, ensure you're running out of your virtual environment (it will be obvious in the terminal) first otherwise the project will not have access to the dependencies. The virtual environment ensures separation of packages between projects.
+3) Install all the dependencies by running **pip install -r requirements.txt**
+
+4) Run the application with **python app.py**
+
+The appplication should now be available at http://localhost:5000/
+
+Once setup, you will **only** need to do step (**2**) and step (**4**) to run your local copy (unless the requirements file is updated in which case you will need to do step (3) also!)
