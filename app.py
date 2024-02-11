@@ -16,7 +16,6 @@ from flask_socketio import SocketIO, emit
 from flask_migrate import Migrate
 import random
 import uuid
-import requests
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///game.db'
