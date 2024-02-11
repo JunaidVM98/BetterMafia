@@ -9,77 +9,85 @@
         var gameUrl = '{{ url_for("game", lobby_id=lobby.lobby_id) }}';
         var userToken = '{{ user_token }}';
         var lobbyId = '{{ lobby.lobby_id }}';
-        var gameStarted = '{{ lobby.game_started }}'
+        var gameStarted = '{{ lobby.game_started }}';
         var socket = io.connect('http://' + document.domain + ':' + location.port + '/lobby');
+        var minParticipants = 2; //minimum number of participants before any game can start
+        var alreadyJoined = "{{ 'true' if already_joined else 'false' }}";
+        
 
+        //function to hide the join form after a user joins
+        function hideJoinForm(){
+            //hide join
+            var joinForm = document.querySelector('form');
+            if (joinForm) {
+                joinForm.style.display = 'none';
+            }
+        }
+
+        function showStartGameButton(){
+            var participantList = document.getElementById('participants');
+            if (isCreator && participantList.getElementsByTagName('li').length >= minParticipants) {
+                document.getElementById('startGameButton').style.display = 'block';
+            }
+        }
+
+        //explain why we need to duplicate logic here (page refresh...)
         document.addEventListener('DOMContentLoaded', function () {
-            var hasJoined = document.getElementById('alreadyJoined').value === 'true';
+            var hasJoined = alreadyJoined === 'true';
 
+            //if the game has started, then the join form should be hidden for all users accessing the lobby
             if (gameStarted === 'True') {
                 if (hasJoined === false) {
-                    var joinForm = document.querySelector('form');
-                    if (joinForm) {
-                        joinForm.style.display = 'none';
-                    }
+                    //hide join
+                    hideJoinForm();
+
+                    //display closed lobby message
                     document.getElementById('lobbyClosedMessage').style.display = 'block';
                 }
             }
 
+            //not sure why this had to be inside this event listener?
             socket.on('lobby_closed', function(data) {
                 if (data.lobby_id === lobbyId) {
-                    var joinForm = document.querySelector('form');
-                    if (joinForm) {
-                        joinForm.style.display = 'none';
-                    }
+                    //hide join
+                    hideJoinForm();
+
+                    //display closed lobby message
                     document.getElementById('lobbyClosedMessage').style.display = 'block';
                 }
             });
 
+            //if a game has started, and the user has joined, redirect them to the game page
             socket.on('redirect_to_game', function(data) {
-            if (hasJoined) {
-                    window.location.href = gameUrl;
+                if (hasJoined) {
+                        window.location.href = gameUrl;
                 }
             });
 
+            //user has joined and game has not started yet - hide option to join again
             if (hasJoined) {
-                // Hide the join form
-                var joinForm = document.querySelector('form');
-                if (joinForm) {
-                    joinForm.style.display = 'none';
-                }
-
-                // In case the person who created the lobby refreshes, we need to ensure the we count participants on page reload so we know whether to show the Start Game button
-                var participantList = document.getElementById('participants');
-                if (isCreator && participantList.getElementsByTagName('li').length >= 4) {
-                    document.getElementById('startGameButton').style.display = 'block';
-                }
+                hideJoinForm();
             }
+
+            //show "Start Game" button if there are enough players (this is initally triggered elswhere but we need this here as well in case the lobby creator manually refreshes)
+            showStartGameButton();
         });
 
-        // Handle the join event
+        // Handle the join event - this:
+        // 1) dynamically updates the participant list for all users when a new user has joined
+        // 2) performs a page refresh for only the current user if they are the ones who joined (this triggers the /lobby/<lobby_id> route in app.py correctly setting the already_joined value for the current user)
         socket.on('update_participants', function(data) {
             if (data.user_token === userToken) {
-                hasJoined = true;
-                // Hide the join form
-                var joinForm = document.querySelector('form');
-                if (joinForm) {
-                    joinForm.style.display = 'none';
-                }
+                // easiest fix is to just refresh the page :(
+                location.reload()
             }
 
-            // Update the participant list
+            // Update the participant list when a new user has joined
             var participantList = document.getElementById('participants');
-            if (participantList) {
-                participantList.innerHTML += '<li>' + data.name + '</li>';
+            participantList.innerHTML += '<li>' + data.name + '</li>';
 
-                // Check if the number of participants is 4 or more (to determine if the creator has enoug users to start lobby)
-                if (isCreator && participantList.getElementsByTagName('li').length >= 4) {
-                    document.getElementById('startGameButton').style.display = 'block';
-                }
-
-            } else {
-                console.error('Participant list element not found');
-            }
+            // show "Start Game" to lobby creator when we reach the minParticipants threshold
+            showStartGameButton();
         });
 
         function startGame() {
@@ -91,8 +99,6 @@
     </script>
 </head>
 <body>
-    <input type="hidden" id="alreadyJoined" value="{{ 'true' if already_joined else 'false' }}">
-
     <h1>Lobby ID: {{ lobby.lobby_id }}</h1>
     <h2>Created by: {{ lobby.creator_name }}</h2>
     <h3>Participants:</h3>

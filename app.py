@@ -16,6 +16,7 @@ from flask_socketio import SocketIO, emit
 from flask_migrate import Migrate
 import random
 import uuid
+import requests
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///game.db'
@@ -65,7 +66,9 @@ def lobby(lobby_id):
     # Retrieve or assign a new user token
     user_token = request.cookies.get('user_token', str(uuid.uuid4()))
     
+    # Perform an inital check when a user loads into the lobby to see if their user token matches a participant who has already joined (i.e. they are in the lobby)
     already_joined = any(p.user_token == user_token for p in participants)
+
     # Debugging
     print("Current User Token:", user_token)
     for participant in participants:
@@ -84,8 +87,11 @@ def lobby(lobby_id):
             db.session.commit()
             already_joined = True
 
+    participants = Participant.query.filter_by(lobby_id=lobby.id).all()
+    already_joined = any(p.user_token == user_token for p in participants)
+
     # Set or update the user token cookie
-    response = make_response(render_template('lobby.html', lobby=lobby, participants=participants, is_creator=is_creator, already_joined=already_joined, game_started=lobby.game_started))
+    response = make_response(render_template('lobby.html', lobby=lobby, participants=participants, is_creator=is_creator, already_joined=already_joined, game_started=lobby.game_started, user_token=user_token))
     response.set_cookie('user_token', user_token)
     return response
 
@@ -104,10 +110,9 @@ def handle_join(data):
         new_participant = Participant(name=participant_name, lobby_id=lobby.id, user_token=user_token)
         db.session.add(new_participant)
         db.session.commit()
-        emit('update_participants', {'name': participant_name}, broadcast=True, namespace='/lobby')
+        emit('update_participants', {'name': participant_name, 'user_token': user_token}, broadcast=True, namespace='/lobby')
     else:
         emit('participant_already_joined', {'name': participant_name}, namespace='/lobby')
-
 
 @app.route('/start_game/<lobby_id>', methods=['POST'])
 def start_game(lobby_id):
