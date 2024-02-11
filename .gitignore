@@ -1,0 +1,6 @@
+# don't commit the user's environment
+game_env/*
+*.pyc
+__pycache__/
+instance/*
+instance/game.db
